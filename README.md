@@ -51,7 +51,10 @@ python manage.py runserver
 ### 3. Frontend telepítése
 ```bash
 cd frontend
-npm install
+npm install @mui/material @emotion/react @emotion/styled
+npm install @mui/icons-material
+npm install @mui/x-data-grid
+npm install date-fns
 npm start
 ```
 
