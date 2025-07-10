@@ -1,0 +1,14 @@
+Django==4.2.7
+djangorestframework==3.14.0
+django-cors-headers==4.3.1
+drf-yasg==1.21.7
+
+# SQL Server support (optional)
+mssql-django==1.4
+pyodbc==4.0.39
+
+# Environment variables
+python-decouple==3.8
+
+# Development tools (optional)
+django-debug-toolbar==4.2.0
