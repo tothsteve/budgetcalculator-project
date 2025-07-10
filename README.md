@@ -50,7 +50,7 @@ python manage.py runserver
 
 ### 3. Frontend telepítése
 ```bash
-cd frontend
+cd budgetcalculator-frontend
 npm install @mui/material @emotion/react @emotion/styled
 npm install @mui/icons-material
 npm install @mui/x-data-grid

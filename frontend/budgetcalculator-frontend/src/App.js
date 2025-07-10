@@ -107,7 +107,7 @@ const api = {
 };
 
 // Enhanced Table Component with filtering and sorting
-const EnhancedTable = ({ rows, columns, onSort, onFilter, title }) => {
+const EnhancedTable = ({ rows = [], columns, onSort, onFilter, title }) => {
   const [order, setOrder] = useState('asc');
   const [orderBy, setOrderBy] = useState('');
   const [page, setPage] = useState(0);
@@ -134,7 +134,10 @@ const EnhancedTable = ({ rows, columns, onSort, onFilter, title }) => {
     onFilter && onFilter({});
   };
 
-  const filteredRows = rows.filter(row => {
+  // Biztosítsuk, hogy rows tömb legyen
+  const safeRows = Array.isArray(rows) ? rows : [];
+  
+  const filteredRows = safeRows.filter(row => {
     return Object.keys(filters).every(key => {
       if (!filters[key]) return true;
       const cellValue = row[key]?.toString().toLowerCase() || '';
@@ -279,10 +282,15 @@ const Homepage = ({ onNavigate }) => {
         api.getOverview(),
         api.getSummary()
       ]);
-      setOverview(overviewData);
-      setSummary(summaryData);
+      
+      // Biztosítsuk, hogy overviewData és summaryData tömbök legyenek
+      setOverview(Array.isArray(overviewData) ? overviewData : []);
+      setSummary(Array.isArray(summaryData) ? summaryData : []);
     } catch (error) {
       console.error('Error loading data:', error);
+      // Hiba esetén üres tömbök
+      setOverview([]);
+      setSummary([]);
     } finally {
       setLoading(false);
     }
@@ -302,10 +310,11 @@ const Homepage = ({ onNavigate }) => {
     { id: 'limitMonth', label: 'Havi limit', format: (value) => value ? Math.floor(value).toLocaleString('hu-HU') + ' Ft' : '-' },
   ];
 
-  const summaryRowsWithStyle = summary.map(item => ({
+  // Biztosítsuk, hogy summary tömb legyen
+  const summaryRowsWithStyle = Array.isArray(summary) ? summary.map(item => ({
     ...item,
     isOverLimit: item.limitMonth && item.sumCost > item.limitMonth
-  }));
+  })) : [];
 
   if (loading) {
     return (
