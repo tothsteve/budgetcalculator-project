@@ -58,6 +58,23 @@ npm install date-fns
 npm start
 ```
 
+### 3B. Alkalmazás indítása
+Backend:
+
+cd /Users/dorituran/Documents/budgetcalculator-project/backend
+
+source venv/bin/activate 
+cd budgetcalculator 
+
+python manage.py runserver
+
+
+Frontend:
+
+cd /Users/dorituran/Documents/budgetcalculator-project/frontend/budgetcalculator-frontend
+
+npm start
+
 ### 4. Alkalmazás elérése
 - **Frontend:** http://localhost:3000
 - **Backend API:** http://localhost:8000
