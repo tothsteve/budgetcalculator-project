@@ -74,6 +74,8 @@ Frontend:
 cd /Users/dorituran/Documents/budgetcalculator-project/frontend/budgetcalculator-frontend
 
 npm start
+---------
+Kilépés Control+C
 
 ### 4. Alkalmazás elérése
 - **Frontend:** http://localhost:3000

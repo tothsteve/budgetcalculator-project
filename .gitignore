@@ -132,3 +132,4 @@ jspm_packages/
 # Temporary folders
 tmp/
 temp/
+frontend/budgetcalculator-frontend/package-lock.json
