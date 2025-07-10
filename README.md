@@ -45,7 +45,6 @@ virtualenv venv --python=python3.11
 source venv/bin/activate  # Windows: venv\Scripts\activate
 pip install -r requirements.txt
 python manage.py migrate
-python manage.py load_initial_data
 python manage.py runserver
 ```
 
