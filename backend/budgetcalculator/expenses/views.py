@@ -1,4 +1,4 @@
-# expenses/views.py frissített verzió Swagger dokumentációval
+# expenses/views.py frissített verzió Swagger dokumentációval és új végpontokkal
 from rest_framework import status
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
@@ -15,7 +15,9 @@ from .serializers import (
     ExpenseCreateRequestSerializer,
     ExpenseCreateResponseSerializer,
     TypesListSerializer,
-    TypesUpdateSerializer
+    TypesUpdateSerializer,
+    TypeCreateSerializer,
+    ExpenseUpdateSerializer
 )
 import logging
 
@@ -266,6 +268,155 @@ def update_limit(request, type_id):
             
     except Exception as e:
         logger.error(f"Error in update_limit: {str(e)}")
+        return Response(
+            {"error": "Internal server error"}, 
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+# ÚJ: Típus létrehozása
+@swagger_auto_schema(
+    method='post',
+    operation_description="Új típust létrehozó API. Az ID a SEQ_TYPE sequenciából automatikusan generálódik.",
+    request_body=TypeCreateSerializer,
+    responses={
+        201: openapi.Response(
+            description="Sikeres létrehozás",
+            schema=openapi.Schema(
+                type=openapi.TYPE_OBJECT,
+                properties={
+                    'typeId': openapi.Schema(type=openapi.TYPE_INTEGER, description='Generált típus ID'),
+                    'typeName': openapi.Schema(type=openapi.TYPE_STRING, description='Típus neve'),
+                    'limitMonth': openapi.Schema(type=openapi.TYPE_INTEGER, description='Havi limit'),
+                }
+            )
+        ),
+        400: 'Bad Request - hibás adatok',
+        500: 'Internal server error'
+    },
+    tags=['Types']
+)
+@api_view(['POST'])
+def create_type(request):
+    """
+    POST /expensetype
+    Új típust létrehozó API.
+    """
+    try:
+        serializer = TypeCreateSerializer(data=request.data)
+        
+        if serializer.is_valid():
+            # Raw SQL használata a sequenciával
+            with connection.cursor() as cursor:
+                cursor.execute("""
+                    INSERT INTO TYPES (ID, TYPE_NAME, LIMIT_MONTH) 
+                    VALUES (NEXT VALUE FOR SEQ_TYPE, %s, %s);
+                    SELECT SCOPE_IDENTITY();
+                """, [
+                    serializer.validated_data['typeName'],
+                    serializer.validated_data.get('limitMonth')
+                ])
+                
+                result = cursor.fetchone()
+                type_id = int(result[0]) if result and result[0] else None
+                
+                if not type_id:
+                    raise Exception("Failed to get inserted ID")
+            
+            response_data = {
+                'typeId': type_id,
+                'typeName': serializer.validated_data['typeName'],
+                'limitMonth': serializer.validated_data.get('limitMonth')
+            }
+            return Response(response_data, status=status.HTTP_201_CREATED)
+        else:
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            
+    except Exception as e:
+        logger.error(f"Error in create_type: {str(e)}")
+        return Response(
+            {"error": "Internal server error"}, 
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+# ÚJ: Költés módosítása
+@swagger_auto_schema(
+    method='put',
+    operation_description="Költés módosítását lehetővé tevő API.",
+    request_body=ExpenseUpdateSerializer,
+    responses={
+        200: openapi.Response(
+            description="Sikeres módosítás",
+            schema=openapi.Schema(
+                type=openapi.TYPE_OBJECT,
+                properties={
+                    'expensesId': openapi.Schema(type=openapi.TYPE_INTEGER, description='Költés ID'),
+                    'date': openapi.Schema(type=openapi.TYPE_STRING, format=openapi.FORMAT_DATE, description='Költés dátuma'),
+                    'typeName': openapi.Schema(type=openapi.TYPE_STRING, description='Típus neve'),
+                    'cost': openapi.Schema(type=openapi.TYPE_INTEGER, description='Költés összege'),
+                    'description': openapi.Schema(type=openapi.TYPE_STRING, description='Leírás'),
+                }
+            )
+        ),
+        400: 'Bad Request - hibás adatok',
+        404: 'Not Found - nem létező költés',
+        500: 'Internal server error'
+    },
+    tags=['Expenses']
+)
+@api_view(['PUT'])
+def update_expense(request, expenses_id):
+    """
+    PUT /expenses/{expenses_id}
+    Költés módosítását lehetővé tevő API.
+    """
+    try:
+        # Ellenőrizzük, hogy létezik-e a költés
+        try:
+            expense = Expenses.objects.get(id=expenses_id)
+        except Expenses.DoesNotExist:
+            return Response(
+                {"error": "Expense not found"}, 
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        serializer = ExpenseUpdateSerializer(data=request.data)
+        
+        if serializer.is_valid():
+            # Type objektum lekérése
+            type_obj = Types.objects.get(id=serializer.validated_data['typeId'])
+            
+            # Raw SQL update a managed = False miatt
+            with connection.cursor() as cursor:
+                cursor.execute("""
+                    UPDATE EXPENSES 
+                    SET DATE_EXP = %s, TYPE_ID = %s, COST = %s, COMMENT = %s
+                    WHERE ID = %s
+                """, [
+                    serializer.validated_data['date'],
+                    serializer.validated_data['typeId'],
+                    serializer.validated_data['cost'],
+                    serializer.validated_data.get('description', ''),
+                    expenses_id
+                ])
+            
+            response_data = {
+                'expensesId': expenses_id,
+                'date': serializer.validated_data['date'],
+                'typeName': type_obj.type_name,
+                'cost': serializer.validated_data['cost'],
+                'description': serializer.validated_data.get('description', '')
+            }
+            return Response(response_data, status=status.HTTP_200_OK)
+        else:
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            
+    except Types.DoesNotExist:
+        return Response(
+            {"error": "Type not found with given typeId"}, 
+            status=status.HTTP_404_NOT_FOUND
+        )
+    except Exception as e:
+        logger.error(f"Error in update_expense: {str(e)}")
         return Response(
             {"error": "Internal server error"}, 
             status=status.HTTP_500_INTERNAL_SERVER_ERROR

@@ -107,3 +107,39 @@ class TypesUpdateSerializer(serializers.ModelSerializer):
     class Meta:
         model = Types
         fields = ['typeName', 'limitMonth']
+
+# ÚJ: Típus létrehozása serializer
+class TypeCreateSerializer(serializers.Serializer):
+    typeName = serializers.CharField(max_length=20)
+    limitMonth = serializers.IntegerField(required=False, allow_null=True)
+    
+    def validate_typeName(self, value):
+        if len(value.strip()) == 0:
+            raise serializers.ValidationError("A típus neve nem lehet üres")
+        if len(value) > 20:
+            raise serializers.ValidationError("A típus neve maximum 20 karakter lehet")
+        return value.strip()
+    
+    def validate_limitMonth(self, value):
+        if value is not None and value < 0:
+            raise serializers.ValidationError("A limit nem lehet negatív")
+        return value
+
+# ÚJ: Költés módosítása serializer
+class ExpenseUpdateSerializer(serializers.Serializer):
+    date = serializers.DateField()
+    typeId = serializers.IntegerField()
+    cost = serializers.IntegerField()
+    description = serializers.CharField(max_length=50, required=False, allow_blank=True)
+    
+    def validate_cost(self, value):
+        if value <= 0:
+            raise serializers.ValidationError("Az összeg pozitív szám kell legyen")
+        return value
+    
+    def validate_typeId(self, value):
+        try:
+            Types.objects.get(id=value)
+        except Types.DoesNotExist:
+            raise serializers.ValidationError("Nem létező típus azonosító")
+        return value
