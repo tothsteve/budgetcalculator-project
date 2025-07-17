@@ -19,13 +19,8 @@ import {
   FormControl,
   InputLabel,
   IconButton,
-  Chip,
   Alert,
   Snackbar,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
   Grid,
   Table,
   TableBody,
@@ -95,15 +90,43 @@ const api = {
     return response.json();
   },
   
+  createType: async (typeData) => {
+    const response = await fetch(`${API_BASE_URL}/expensetype`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(typeData),
+    });
+    if (!response.ok) {
+      throw new Error('Failed to create type');
+    }
+    return response.json();
+  },
+  
+  updateExpense: async (expenseId, expenseData) => {
+    const response = await fetch(`${API_BASE_URL}/expenses/${expenseId}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(expenseData),
+    });
+    if (!response.ok) {
+      throw new Error('Failed to update expense');
+    }
+    return response.json();
+  },
+
   updateLimit: async (typeId, limitMonth) => {
     const response = await fetch(`${API_BASE_URL}/koltesek/limitmod/${typeId}?limitMonth=${limitMonth}`, {
-      method: 'PUT',
+      method: 'PUT'
     });
     if (!response.ok) {
       throw new Error('Failed to update limit');
     }
     return response.json();
-  }
+  },
 };
 
 // Enhanced Table Component with filtering and sorting
@@ -634,6 +657,154 @@ const NewExpense = ({ onNavigate }) => {
   );
 };
 
+// Új típus felvétele komponens
+const NewTypeForm = ({ onNavigate }) => {
+  const [formData, setFormData] = useState({
+    typeName: '',
+    limitMonth: ''
+  });
+  const [loading, setLoading] = useState(false);
+  const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
+
+  const handleChange = (field, value) => {
+    setFormData(prev => ({ ...prev, [field]: value }));
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    
+    // Validation
+    if (!formData.typeName.trim()) {
+      setSnackbar({
+        open: true,
+        message: 'A típus megnevezése kötelező!',
+        severity: 'error'
+      });
+      return;
+    }
+    
+    if (formData.typeName.length > 20) {
+      setSnackbar({
+        open: true,
+        message: 'A típus megnevezése maximum 20 karakter lehet!',
+        severity: 'error'
+      });
+      return;
+    }
+    
+    if (formData.limitMonth && parseInt(formData.limitMonth) < 0) {
+      setSnackbar({
+        open: true,
+        message: 'A limit nem lehet negatív!',
+        severity: 'error'
+      });
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const typeData = {
+        typeName: formData.typeName.trim(),
+        limitMonth: formData.limitMonth ? parseInt(formData.limitMonth) : null
+      };
+      
+      await api.createType(typeData);
+      setSnackbar({
+        open: true,
+        message: 'Új típus sikeresen létrehozva!',
+        severity: 'success'
+      });
+      setTimeout(() => onNavigate('limits'), 1500);
+    } catch (error) {
+      console.error('Error creating type:', error);
+      setSnackbar({
+        open: true,
+        message: 'Hiba történt a mentés során!',
+        severity: 'error'
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <Container maxWidth="md" sx={{ mt: 4, mb: 4 }}>
+      <Box mb={3} display="flex" alignItems="center" gap={2}>
+        <IconButton onClick={() => onNavigate('limits')}>
+          <ArrowBackIcon />
+        </IconButton>
+        <Typography variant="h4">
+          Új típus felvétele
+        </Typography>
+      </Box>
+      
+      <Card>
+        <CardContent>
+          <form onSubmit={handleSubmit}>
+            <Grid container spacing={3}>
+              <Grid item xs={12}>
+                <TextField
+                  fullWidth
+                  label="Új típus megnevezése"
+                  value={formData.typeName}
+                  onChange={(e) => handleChange('typeName', e.target.value)}
+                  inputProps={{ maxLength: 20 }}
+                  required
+                  helperText={`${formData.typeName.length}/20 karakter`}
+                />
+              </Grid>
+              
+              <Grid item xs={12}>
+                <TextField
+                  fullWidth
+                  label="Havi limit"
+                  type="number"
+                  value={formData.limitMonth}
+                  onChange={(e) => handleChange('limitMonth', e.target.value)}
+                  InputProps={{
+                    endAdornment: <InputAdornment position="end">Ft</InputAdornment>
+                  }}
+                  inputProps={{ min: 0 }}
+                  helperText="Opcionális"
+                />
+              </Grid>
+            </Grid>
+            
+            <Box mt={3} display="flex" gap={2} justifyContent="flex-end">
+              <Button
+                variant="outlined"
+                onClick={() => onNavigate('limits')}
+                disabled={loading}
+              >
+                Vissza
+              </Button>
+              <Button
+                type="submit"
+                variant="contained"
+                startIcon={<SaveIcon />}
+                disabled={loading}
+              >
+                {loading ? 'Mentés...' : 'Mentés'}
+              </Button>
+            </Box>
+          </form>
+        </CardContent>
+      </Card>
+
+      <Snackbar
+        open={snackbar.open}
+        autoHideDuration={6000}
+        onClose={() => setSnackbar({ ...snackbar, open: false })}
+      >
+        <Alert severity={snackbar.severity} onClose={() => setSnackbar({ ...snackbar, open: false })}>
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
+    </Container>
+  );
+};
+
+// Limitek kezelése komponens
 const LimitsManagement = ({ onNavigate }) => {
   const [types, setTypes] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -778,12 +949,19 @@ const LimitsManagement = ({ onNavigate }) => {
         </Table>
       </TableContainer>
       
-      <Box mt={2}>
+      <Box mt={2} display="flex" gap={2}>
         <Button
           variant="contained"
           onClick={() => onNavigate('home')}
         >
           Vissza az áttekintéshez
+        </Button>
+        <Button
+          variant="outlined"
+          startIcon={<AddIcon />}
+          onClick={() => onNavigate('new-type')}
+        >
+          Új típus felvétele
         </Button>
       </Box>
 
@@ -815,6 +993,8 @@ const App = () => {
         return <NewExpense onNavigate={navigate} />;
       case 'limits':
         return <LimitsManagement onNavigate={navigate} />;
+      case 'new-type':
+        return <NewTypeForm onNavigate={navigate} />;
       default:
         return <Homepage onNavigate={navigate} />;
     }

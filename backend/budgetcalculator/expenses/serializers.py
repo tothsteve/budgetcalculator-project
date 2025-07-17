@@ -113,6 +113,9 @@ class TypeCreateSerializer(serializers.Serializer):
     typeName = serializers.CharField(max_length=20)
     limitMonth = serializers.IntegerField(required=False, allow_null=True)
     
+    # Response fields
+    typeId = serializers.IntegerField(read_only=True)
+    
     def validate_typeName(self, value):
         if len(value.strip()) == 0:
             raise serializers.ValidationError("A típus neve nem lehet üres")
@@ -124,7 +127,39 @@ class TypeCreateSerializer(serializers.Serializer):
         if value is not None and value < 0:
             raise serializers.ValidationError("A limit nem lehet negatív")
         return value
-
+    
+    def create(self, validated_data):
+        from django.db import connection
+        
+        try:
+            # SQL Server sequencia használata az ID generáláshoz
+            with connection.cursor() as cursor:
+                # OUTPUT clause használata az ID visszaadásához
+                cursor.execute("""
+                    INSERT INTO TYPES (ID, TYPE_NAME, LIMIT_MONTH) 
+                    OUTPUT INSERTED.ID
+                    VALUES (NEXT VALUE FOR SEQ_TYPE, %s, %s)
+                """, [
+                    validated_data['typeName'],
+                    validated_data.get('limitMonth', None)
+                ])
+                
+                # Az beszúrt ID lekérdezése
+                result = cursor.fetchone()
+                type_id = result[0] if result else None
+                
+                if not type_id:
+                    raise Exception("Failed to get inserted ID")
+            
+            # Dictionary visszaadása a JSON serialization miatt
+            return {
+                'typeId': type_id,
+                'typeName': validated_data['typeName'],
+                'limitMonth': validated_data.get('limitMonth', None)
+            }
+            
+        except Exception as e:
+            raise serializers.ValidationError(f"Database error: {str(e)}")
 # ÚJ: Költés módosítása serializer
 class ExpenseUpdateSerializer(serializers.Serializer):
     date = serializers.DateField()

@@ -171,7 +171,9 @@ def create_expense(request):
         serializer = ExpenseCreateSerializer(data=request.data)
         
         if serializer.is_valid():
-            expense = serializer.save()
+            expense = serializer.save()  # A serializer create() metódusa kezeli
+            
+            # Response formázás
             response_data = {
                 'id': expense.id,
                 'date': expense.date_exp,
@@ -189,6 +191,7 @@ def create_expense(request):
             {"error": "Internal server error"}, 
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
+
 
 @swagger_auto_schema(
     method='get',
@@ -295,6 +298,7 @@ def update_limit(request, type_id):
     },
     tags=['Types']
 )
+# EGYSÉGES: Type létrehozása
 @api_view(['POST'])
 def create_type(request):
     """
@@ -305,29 +309,8 @@ def create_type(request):
         serializer = TypeCreateSerializer(data=request.data)
         
         if serializer.is_valid():
-            # Raw SQL használata a sequenciával
-            with connection.cursor() as cursor:
-                cursor.execute("""
-                    INSERT INTO TYPES (ID, TYPE_NAME, LIMIT_MONTH) 
-                    VALUES (NEXT VALUE FOR SEQ_TYPE, %s, %s);
-                    SELECT SCOPE_IDENTITY();
-                """, [
-                    serializer.validated_data['typeName'],
-                    serializer.validated_data.get('limitMonth')
-                ])
-                
-                result = cursor.fetchone()
-                type_id = int(result[0]) if result and result[0] else None
-                
-                if not type_id:
-                    raise Exception("Failed to get inserted ID")
-            
-            response_data = {
-                'typeId': type_id,
-                'typeName': serializer.validated_data['typeName'],
-                'limitMonth': serializer.validated_data.get('limitMonth')
-            }
-            return Response(response_data, status=status.HTTP_201_CREATED)
+            result = serializer.save()  # Dictionary-t ad vissza
+            return Response(result, status=status.HTTP_201_CREATED)
         else:
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
             
