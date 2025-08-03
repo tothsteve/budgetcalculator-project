@@ -51,36 +51,86 @@ limit_month_param = openapi.Parameter(
     },
     tags=['Expenses']
 )
-@api_view(['GET'])
+@swagger_auto_schema(
+    method='post',
+    operation_description="Új kiadást rögzítő API. Validálja a dátumot (nem jövőbeli), összeget (pozitív), típust és leírást.",
+    request_body=ExpenseCreateSerializer,
+    responses={
+        200: openapi.Response(
+            description="Sikeres mentés",
+            schema=openapi.Schema(
+                type=openapi.TYPE_OBJECT,
+                properties={
+                    'id': openapi.Schema(type=openapi.TYPE_INTEGER, description='Generált ID'),
+                    'date': openapi.Schema(type=openapi.TYPE_STRING, format=openapi.FORMAT_DATE, description='Költés dátuma'),
+                    'typeName': openapi.Schema(type=openapi.TYPE_STRING, description='Típus neve'),
+                    'cost': openapi.Schema(type=openapi.TYPE_INTEGER, description='Költés összege'),
+                    'description': openapi.Schema(type=openapi.TYPE_STRING, description='Leírás'),
+                }
+            )
+        ),
+        400: 'Bad Request - hibás adatok',
+        500: 'Internal server error'
+    },
+    tags=['Expenses']
+)
+@api_view(['GET', 'POST'])
 def expense_overview(request):
     """
-    GET /koltesek/attekinto
-    A korábbi költéseket tételenként visszaadó API.
+    GET /expenses - A korábbi költéseket tételenként visszaadó API.
+    POST /expenses - Új kiadást rögzítő API.
     """
-    try:
-        expense_id = request.query_params.get('expensesId')
-        
-        if expense_id:
-            try:
-                expense = Expenses.objects.select_related('type_id').get(id=expense_id)
-                serializer = ExpenseOverviewSerializer(expense)
-                return Response([serializer.data], status=status.HTTP_200_OK)
-            except Expenses.DoesNotExist:
-                return Response(
-                    {"error": "Expense not found"}, 
-                    status=status.HTTP_404_NOT_FOUND
-                )
-        else:
-            expenses = Expenses.objects.select_related('type_id').order_by('-date_exp')
-            serializer = ExpenseOverviewSerializer(expenses, many=True)
-            return Response(serializer.data, status=status.HTTP_200_OK)
+    if request.method == 'GET':
+        try:
+            expense_id = request.query_params.get('expensesId')
             
-    except Exception as e:
-        logger.error(f"Error in expense_overview: {str(e)}")
-        return Response(
-            {"error": "Internal server error"}, 
-            status=status.HTTP_500_INTERNAL_SERVER_ERROR
-        )
+            if expense_id:
+                try:
+                    expense = Expenses.objects.select_related('type_id').get(id=expense_id)
+                    serializer = ExpenseOverviewSerializer(expense)
+                    return Response([serializer.data], status=status.HTTP_200_OK)
+                except Expenses.DoesNotExist:
+                    return Response(
+                        {"error": "Expense not found"}, 
+                        status=status.HTTP_404_NOT_FOUND
+                    )
+            else:
+                expenses = Expenses.objects.select_related('type_id').order_by('-date_exp')
+                serializer = ExpenseOverviewSerializer(expenses, many=True)
+                return Response(serializer.data, status=status.HTTP_200_OK)
+                
+        except Exception as e:
+            logger.error(f"Error in expense_overview GET: {str(e)}")
+            return Response(
+                {"error": "Internal server error"}, 
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+    
+    elif request.method == 'POST':
+        try:
+            serializer = ExpenseCreateSerializer(data=request.data)
+            
+            if serializer.is_valid():
+                expense = serializer.save()  # A serializer create() metódusa kezeli
+                
+                # Response formázás
+                response_data = {
+                    'id': expense.id,
+                    'date': expense.date_exp,
+                    'typeName': expense.type_id.type_name,
+                    'cost': expense.cost,
+                    'description': expense.comment
+                }
+                return Response(response_data, status=status.HTTP_200_OK)
+            else:
+                return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+                
+        except Exception as e:
+            logger.error(f"Error in expense_overview POST: {str(e)}")
+            return Response(
+                {"error": "Internal server error"}, 
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
 @swagger_auto_schema(
     method='get',
@@ -94,7 +144,7 @@ def expense_overview(request):
 @api_view(['GET'])
 def expense_summary(request):
     """
-    GET /koltesek/osszegzo
+    GET /expenses/sum
     A korábbi kiadásokat havonként és típusonként visszaadó API
     """
     try:
@@ -138,60 +188,6 @@ def expense_summary(request):
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
 
-@swagger_auto_schema(
-    method='post',
-    operation_description="Új kiadást rögzítő API. Validálja a dátumot (nem jövőbeli), összeget (pozitív), típust és leírást.",
-    request_body=ExpenseCreateSerializer,
-    responses={
-        200: openapi.Response(
-            description="Sikeres mentés",
-            schema=openapi.Schema(
-                type=openapi.TYPE_OBJECT,
-                properties={
-                    'id': openapi.Schema(type=openapi.TYPE_INTEGER, description='Generált ID'),
-                    'date': openapi.Schema(type=openapi.TYPE_STRING, format=openapi.FORMAT_DATE, description='Költés dátuma'),
-                    'typeName': openapi.Schema(type=openapi.TYPE_STRING, description='Típus neve'),
-                    'cost': openapi.Schema(type=openapi.TYPE_INTEGER, description='Költés összege'),
-                    'description': openapi.Schema(type=openapi.TYPE_STRING, description='Leírás'),
-                }
-            )
-        ),
-        400: 'Bad Request - hibás adatok',
-        500: 'Internal server error'
-    },
-    tags=['Expenses']
-)
-@api_view(['POST'])
-def create_expense(request):
-    """
-    POST /koltesek
-    Új kiadást rögzítő API.
-    """
-    try:
-        serializer = ExpenseCreateSerializer(data=request.data)
-        
-        if serializer.is_valid():
-            expense = serializer.save()  # A serializer create() metódusa kezeli
-            
-            # Response formázás
-            response_data = {
-                'id': expense.id,
-                'date': expense.date_exp,
-                'typeName': expense.type_id.type_name,
-                'cost': expense.cost,
-                'description': expense.comment
-            }
-            return Response(response_data, status=status.HTTP_200_OK)
-        else:
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-            
-    except Exception as e:
-        logger.error(f"Error in create_expense: {str(e)}")
-        return Response(
-            {"error": "Internal server error"}, 
-            status=status.HTTP_500_INTERNAL_SERVER_ERROR
-        )
-
 
 @swagger_auto_schema(
     method='get',
@@ -205,7 +201,7 @@ def create_expense(request):
 @api_view(['GET'])
 def types_list(request):
     """
-    GET /koltesek/limit_kiir
+    GET /expenses/limit
     A típusokat és a hozzájuk tartozó limiteket visszaadó API.
     """
     try:
@@ -235,7 +231,7 @@ def types_list(request):
 @api_view(['PUT'])
 def update_limit(request, type_id):
     """
-    PUT /koltesek/limitmod/<type_id>
+    PUT /expenses/limit/<type_id>
     A limitek módosítását lehetővé tevő API.
     """
     try:

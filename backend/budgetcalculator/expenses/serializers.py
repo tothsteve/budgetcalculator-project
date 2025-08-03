@@ -3,14 +3,15 @@ from rest_framework import serializers
 from .models import Expenses, Types
 
 class ExpenseOverviewSerializer(serializers.ModelSerializer):
+    expensesId = serializers.IntegerField(source='id')
     date = serializers.DateField(source='date_exp')
     typeName = serializers.CharField(source='type_id.type_name')
     cost = serializers.IntegerField()
-    descript = serializers.CharField(source='comment')
+    description = serializers.CharField(source='comment')
     
     class Meta:
         model = Expenses
-        fields = ['date', 'typeName', 'cost', 'descript']
+        fields = ['expensesId', 'date', 'typeName', 'cost', 'description']
 
 class ExpenseSummarySerializer(serializers.Serializer):
     month = serializers.CharField()
@@ -20,20 +21,18 @@ class ExpenseSummarySerializer(serializers.Serializer):
 
 # Fő serializer az üzleti logikához
 class ExpenseCreateSerializer(serializers.ModelSerializer):
-    datum = serializers.DateField(source='date_exp')
+    date = serializers.DateField(source='date_exp')
     typeId = serializers.IntegerField(source='type_id.id', write_only=True)
-    osszeg = serializers.IntegerField(source='cost')
-    leiras = serializers.CharField(source='comment', required=False, allow_blank=True)
+    cost = serializers.IntegerField()
+    description = serializers.CharField(source='comment', required=False, allow_blank=True)
     
     # Response fields
     id = serializers.IntegerField(read_only=True)
-    date = serializers.DateField(source='date_exp', read_only=True)
     typeName = serializers.CharField(source='type_id.type_name', read_only=True)
-    description = serializers.CharField(source='comment', read_only=True)
     
     class Meta:
         model = Expenses
-        fields = ['datum', 'typeId', 'osszeg', 'leiras', 'id', 'date', 'typeName', 'cost', 'description']
+        fields = ['date', 'typeId', 'cost', 'description', 'id', 'typeName']
         
     def create(self, validated_data):
         from django.db import connection
@@ -79,10 +78,10 @@ class ExpenseCreateSerializer(serializers.ModelSerializer):
 
 # Swagger dokumentációhoz külön serializer osztályok
 class ExpenseCreateRequestSerializer(serializers.Serializer):
-    datum = serializers.DateField(help_text="Költés dátuma (YYYY-MM-DD formátumban)")
+    date = serializers.DateField(help_text="Költés dátuma (YYYY-MM-DD formátumban)")
     typeId = serializers.IntegerField(help_text="Költési típus egyedi azonosítója")
-    osszeg = serializers.IntegerField(help_text="Költés összege (pozitív egész szám)")
-    leiras = serializers.CharField(max_length=50, required=False, allow_blank=True, help_text="Költés leírása (maximum 50 karakter)")
+    cost = serializers.IntegerField(help_text="Költés összege (pozitív egész szám)")
+    description = serializers.CharField(max_length=50, required=False, allow_blank=True, help_text="Költés leírása (maximum 50 karakter)")
 
 class ExpenseCreateResponseSerializer(serializers.Serializer):
     id = serializers.IntegerField(help_text="Sequencia által generált egyedi azonosító")

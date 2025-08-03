@@ -60,19 +60,19 @@ const API_BASE_URL = 'http://localhost:8000';
 const api = {
   getOverview: async (expenseId = null) => {
     const url = expenseId 
-      ? `${API_BASE_URL}/koltesek/attekinto?expensesId=${expenseId}`
-      : `${API_BASE_URL}/koltesek/attekinto`;
+      ? `${API_BASE_URL}/expenses?expensesId=${expenseId}`
+      : `${API_BASE_URL}/expenses`;
     const response = await fetch(url);
     return response.json();
   },
   
   getSummary: async () => {
-    const response = await fetch(`${API_BASE_URL}/koltesek/osszegzo`);
+    const response = await fetch(`${API_BASE_URL}/expenses/sum`);
     return response.json();
   },
   
   createExpense: async (expenseData) => {
-    const response = await fetch(`${API_BASE_URL}/koltesek`, {
+    const response = await fetch(`${API_BASE_URL}/expenses`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -86,7 +86,7 @@ const api = {
   },
   
   getTypes: async () => {
-    const response = await fetch(`${API_BASE_URL}/koltesek/limit_kiir`);
+    const response = await fetch(`${API_BASE_URL}/expenses/limit`);
     return response.json();
   },
   
@@ -119,7 +119,7 @@ const api = {
   },
 
   updateLimit: async (typeId, limitMonth) => {
-    const response = await fetch(`${API_BASE_URL}/koltesek/limitmod/${typeId}?limitMonth=${limitMonth}`, {
+    const response = await fetch(`${API_BASE_URL}/expenses/limit/${typeId}?limitMonth=${limitMonth}`, {
       method: 'PUT'
     });
     if (!response.ok) {
@@ -323,7 +323,7 @@ const Homepage = ({ onNavigate }) => {
     { id: 'date', label: 'Dátum', format: (value) => format(new Date(value), 'yyyy-MM-dd') },
     { id: 'typeName', label: 'Típus' },
     { id: 'cost', label: 'Összeg', format: (value) => Math.floor(value).toLocaleString('hu-HU') + ' Ft' },
-    { id: 'descript', label: 'Leírás' },
+    { id: 'description', label: 'Leírás' },
   ];
 
   const summaryColumns = [
@@ -406,10 +406,10 @@ const Homepage = ({ onNavigate }) => {
 const NewExpense = ({ onNavigate }) => {
   const [types, setTypes] = useState([]);
   const [expenses, setExpenses] = useState([{
-    datum: new Date().toISOString().split('T')[0],
+    date: new Date().toISOString().split('T')[0],
     typeId: '',
-    osszeg: '',
-    leiras: ''
+    cost: '',
+    description: ''
   }]);
   const [loading, setLoading] = useState(true);
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
@@ -434,10 +434,10 @@ const NewExpense = ({ onNavigate }) => {
 
   const addExpenseRow = () => {
     setExpenses([...expenses, {
-      datum: new Date().toISOString().split('T')[0],
+      date: new Date().toISOString().split('T')[0],
       typeId: types[0]?.typeId || '',
-      osszeg: '',
-      leiras: ''
+      cost: '',
+      description: ''
     }]);
   };
 
@@ -458,7 +458,7 @@ const NewExpense = ({ onNavigate }) => {
     
     // Validation
     for (let expense of expenses) {
-      if (!expense.datum || !expense.typeId || !expense.osszeg) {
+      if (!expense.date || !expense.typeId || !expense.cost) {
         setSnackbar({
           open: true,
           message: 'Minden kötelező mezőt ki kell tölteni!',
@@ -466,7 +466,7 @@ const NewExpense = ({ onNavigate }) => {
         });
         return;
       }
-      if (new Date(expense.datum) > new Date()) {
+      if (new Date(expense.date) > new Date()) {
         setSnackbar({
           open: true,
           message: 'A dátum nem lehet jövőbeli!',
@@ -474,7 +474,7 @@ const NewExpense = ({ onNavigate }) => {
         });
         return;
       }
-      if (parseInt(expense.osszeg) <= 0) {
+      if (parseInt(expense.cost) <= 0) {
         setSnackbar({
           open: true,
           message: 'Az összeg pozitív egész szám kell legyen!',
@@ -482,7 +482,7 @@ const NewExpense = ({ onNavigate }) => {
         });
         return;
       }
-      if (expense.leiras && expense.leiras.length > 50) {
+      if (expense.description && expense.description.length > 50) {
         setSnackbar({
           open: true,
           message: 'A leírás maximum 50 karakter lehet!',
@@ -494,12 +494,12 @@ const NewExpense = ({ onNavigate }) => {
 
     try {
       for (let expense of expenses) {
-        if (expense.datum && expense.typeId && expense.osszeg) {
+        if (expense.date && expense.typeId && expense.cost) {
           await api.createExpense({
-            datum: expense.datum,
+            date: expense.date,
             typeId: parseInt(expense.typeId),
-            osszeg: parseInt(expense.osszeg),
-            leiras: expense.leiras
+            cost: parseInt(expense.cost),
+            description: expense.description
           });
         }
       }
@@ -552,8 +552,8 @@ const NewExpense = ({ onNavigate }) => {
                     fullWidth
                     label="Dátum"
                     type="date"
-                    value={expense.datum}
-                    onChange={(e) => updateExpense(index, 'datum', e.target.value)}
+                    value={expense.date}
+                    onChange={(e) => updateExpense(index, 'date', e.target.value)}
                     InputLabelProps={{ shrink: true }}
                     required
                   />
@@ -581,8 +581,8 @@ const NewExpense = ({ onNavigate }) => {
                     fullWidth
                     label="Összeg"
                     type="number"
-                    value={expense.osszeg}
-                    onChange={(e) => updateExpense(index, 'osszeg', e.target.value)}
+                    value={expense.cost}
+                    onChange={(e) => updateExpense(index, 'cost', e.target.value)}
                     InputProps={{
                       endAdornment: <InputAdornment position="end">Ft</InputAdornment>
                     }}
@@ -595,8 +595,8 @@ const NewExpense = ({ onNavigate }) => {
                   <TextField
                     fullWidth
                     label="Leírás"
-                    value={expense.leiras}
-                    onChange={(e) => updateExpense(index, 'leiras', e.target.value)}
+                    value={expense.description}
+                    onChange={(e) => updateExpense(index, 'description', e.target.value)}
                     inputProps={{ maxLength: 50 }}
                   />
                 </Grid>
