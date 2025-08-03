@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   ThemeProvider,
   createTheme,
@@ -294,29 +294,103 @@ const Homepage = ({ onNavigate }) => {
   const [summary, setSummary] = useState([]);
   const [showSummary, setShowSummary] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [types, setTypes] = useState([]);
+  const [editingId, setEditingId] = useState(null);
+  const [editData, setEditData] = useState({});
+  const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
+  const [page, setPage] = useState(0);
+  const [rowsPerPage, setRowsPerPage] = useState(10);
 
-  useEffect(() => {
-    loadData();
-  }, []);
-
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     try {
-      const [overviewData, summaryData] = await Promise.all([
+      const [overviewData, summaryData, typesData] = await Promise.all([
         api.getOverview(),
-        api.getSummary()
+        api.getSummary(),
+        api.getTypes()
       ]);
       
       // Biztosítsuk, hogy overviewData és summaryData tömbök legyenek
       setOverview(Array.isArray(overviewData) ? overviewData : []);
       setSummary(Array.isArray(summaryData) ? summaryData : []);
+      setTypes(Array.isArray(typesData) ? typesData : []);
     } catch (error) {
       console.error('Error loading data:', error);
       // Hiba esetén üres tömbök
       setOverview([]);
       setSummary([]);
+      setTypes([]);
     } finally {
       setLoading(false);
     }
+  }, []);
+
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
+
+  // Editing functions
+  const handleEdit = (expense) => {
+    setEditingId(expense.expensesId);
+    const selectedType = types.find(type => type.typeName === expense.typeName);
+    setEditData({
+      date: expense.date,
+      typeId: selectedType ? selectedType.typeId : '',
+      cost: expense.cost,
+      description: expense.description || ''
+    });
+  };
+
+  const handleSave = async (expenseId) => {
+    try {
+      // Prepare data with proper types
+      const dataToSend = {
+        date: editData.date,
+        typeId: parseInt(editData.typeId),
+        cost: parseInt(editData.cost) || 0,
+        description: editData.description || ''
+      };
+      
+      const updatedExpense = await api.updateExpense(expenseId, dataToSend);
+      
+      // Update the overview data locally instead of reloading everything
+      setOverview(prevOverview => 
+        prevOverview.map(expense => 
+          expense.expensesId === expenseId 
+            ? {
+                ...expense,
+                date: updatedExpense.date,
+                typeName: updatedExpense.typeName,
+                cost: updatedExpense.cost,
+                description: updatedExpense.description
+              }
+            : expense
+        )
+      );
+      
+      setEditingId(null);
+      setEditData({});
+      setSnackbar({
+        open: true,
+        message: 'Költés sikeresen módosítva!',
+        severity: 'success'
+      });
+    } catch (error) {
+      console.error('Error updating expense:', error);
+      setSnackbar({
+        open: true,
+        message: 'Hiba történt a módosítás során!',
+        severity: 'error'
+      });
+    }
+  };
+
+  const handleCancel = () => {
+    setEditingId(null);
+    setEditData({});
+  };
+
+  const handleEditChange = (field, value) => {
+    setEditData(prev => ({ ...prev, [field]: value }));
   };
 
   const overviewColumns = [
@@ -324,6 +398,7 @@ const Homepage = ({ onNavigate }) => {
     { id: 'typeName', label: 'Típus' },
     { id: 'cost', label: 'Összeg', format: (value) => Math.floor(value).toLocaleString('hu-HU') + ' Ft' },
     { id: 'description', label: 'Leírás' },
+    { id: 'actions', label: 'Műveletek' },
   ];
 
   const summaryColumns = [
@@ -354,11 +429,132 @@ const Homepage = ({ onNavigate }) => {
       </Typography>
       
       <Box mb={3}>
-        <EnhancedTable
-          rows={overview}
-          columns={overviewColumns}
-          title="Költések"
-        />
+        <Paper elevation={3}>
+          <Box p={2}>
+            <Typography variant="h6" mb={2}>Költések</Typography>
+            <TableContainer>
+              <Table>
+                <TableHead>
+                  <TableRow>
+                    <TableCell><strong>Dátum</strong></TableCell>
+                    <TableCell><strong>Típus</strong></TableCell>
+                    <TableCell><strong>Összeg</strong></TableCell>
+                    <TableCell><strong>Leírás</strong></TableCell>
+                    <TableCell><strong>Műveletek</strong></TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {overview
+                    .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
+                    .map((expense) => (
+                    <TableRow key={expense.expensesId} hover>
+                      <TableCell>
+                        {editingId === expense.expensesId ? (
+                          <TextField
+                            size="small"
+                            type="date"
+                            value={editData.date || ''}
+                            onChange={(e) => handleEditChange('date', e.target.value)}
+                            InputLabelProps={{ shrink: true }}
+                          />
+                        ) : (
+                          format(new Date(expense.date), 'yyyy-MM-dd')
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        {editingId === expense.expensesId ? (
+                          <FormControl size="small" sx={{ minWidth: 120 }}>
+                            <Select
+                              value={editData.typeId || ''}
+                              onChange={(e) => handleEditChange('typeId', e.target.value)}
+                            >
+                              {types.map(type => (
+                                <MenuItem key={type.typeId} value={type.typeId}>
+                                  {type.typeName}
+                                </MenuItem>
+                              ))}
+                            </Select>
+                          </FormControl>
+                        ) : (
+                          expense.typeName
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        {editingId === expense.expensesId ? (
+                          <TextField
+                            size="small"
+                            type="number"
+                            value={editData.cost || ''}
+                            onChange={(e) => handleEditChange('cost', e.target.value)}
+                            InputProps={{
+                              endAdornment: <InputAdornment position="end">Ft</InputAdornment>
+                            }}
+                            inputProps={{ min: 1 }}
+                          />
+                        ) : (
+                          Math.floor(expense.cost).toLocaleString('hu-HU') + ' Ft'
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        {editingId === expense.expensesId ? (
+                          <TextField
+                            size="small"
+                            value={editData.description || ''}
+                            onChange={(e) => handleEditChange('description', e.target.value)}
+                            inputProps={{ maxLength: 50 }}
+                          />
+                        ) : (
+                          expense.description || '-'
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        {editingId === expense.expensesId ? (
+                          <Box display="flex" gap={1}>
+                            <IconButton
+                              color="primary"
+                              onClick={() => handleSave(expense.expensesId)}
+                              size="small"
+                            >
+                              <SaveIcon />
+                            </IconButton>
+                            <IconButton
+                              color="error"
+                              onClick={handleCancel}
+                              size="small"
+                            >
+                              <CancelIcon />
+                            </IconButton>
+                          </Box>
+                        ) : (
+                          <IconButton
+                            color="primary"
+                            onClick={() => handleEdit(expense)}
+                            size="small"
+                          >
+                            <EditIcon />
+                          </IconButton>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+            
+            <TablePagination
+              rowsPerPageOptions={[5, 10, 25]}
+              component="div"
+              count={overview.length}
+              rowsPerPage={rowsPerPage}
+              page={page}
+              onPageChange={(event, newPage) => setPage(newPage)}
+              onRowsPerPageChange={(event) => {
+                setRowsPerPage(parseInt(event.target.value, 10));
+                setPage(0);
+              }}
+            />
+          </Box>
+        </Paper>
         
         <Box mt={2}>
           <Button
@@ -399,6 +595,16 @@ const Homepage = ({ onNavigate }) => {
           </Box>
         </Box>
       )}
+
+      <Snackbar
+        open={snackbar.open}
+        autoHideDuration={6000}
+        onClose={() => setSnackbar({ ...snackbar, open: false })}
+      >
+        <Alert severity={snackbar.severity} onClose={() => setSnackbar({ ...snackbar, open: false })}>
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
     </Container>
   );
 };
