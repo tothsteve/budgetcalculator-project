@@ -1,0 +1,153 @@
+import React from 'react';
+import {
+  Box,
+  Drawer,
+  List,
+  ListItem,
+  ListItemButton,
+  ListItemIcon,
+  ListItemText,
+  Typography,
+  IconButton,
+} from '@mui/material';
+import {
+  Close as CloseIcon,
+  Home as HomeIcon,
+  Add as AddIcon,
+  Settings as SettingsIcon,
+  Category as CategoryIcon,
+} from '@mui/icons-material';
+
+const navigation = [
+  { name: 'Áttekintés', page: 'home', icon: HomeIcon },
+  { name: 'Új kiadás', page: 'new-expense', icon: AddIcon },
+  { name: 'Típusok', page: 'limits', icon: CategoryIcon },
+  { name: 'Új típus', page: 'new-type', icon: SettingsIcon },
+];
+
+const Sidebar = ({ isOpen, onClose, width, isMobile, currentPage, onNavigate }) => {
+  const drawerContent = (
+    <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+      {/* Header with Logo */}
+      <Box
+        sx={{
+          p: 2,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          minHeight: 64,
+          borderBottom: 1,
+          borderColor: 'divider',
+        }}
+      >
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <img
+            src="/logo192.png"
+            alt="ITCardigan"
+            style={{ width: 32, height: 32, borderRadius: '50%' }}
+          />
+          <Box>
+            <Typography variant="h6" component="h1" fontWeight="bold" sx={{ lineHeight: 1.2 }}>
+              Budget Kalkulátor
+            </Typography>
+            <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.75rem' }}>
+              by ITCardigan
+            </Typography>
+          </Box>
+        </Box>
+        {isMobile && (
+          <IconButton onClick={onClose} edge="end">
+            <CloseIcon />
+          </IconButton>
+        )}
+      </Box>
+
+      {/* Navigation */}
+      <Box sx={{ flexGrow: 1, overflow: 'auto' }}>
+        <List sx={{ p: 1 }}>
+          {navigation.map((item) => (
+            <ListItem key={item.name} disablePadding sx={{ mb: 0.5 }}>
+              <ListItemButton
+                onClick={() => {
+                  onNavigate(item.page);
+                  if (isMobile) onClose();
+                }}
+                sx={{
+                  borderRadius: 1,
+                  ...(currentPage === item.page && {
+                    bgcolor: 'primary.50',
+                    color: 'primary.600',
+                    '& .MuiListItemIcon-root': {
+                      color: 'primary.600',
+                    },
+                  }),
+                  '&:hover': {
+                    bgcolor: 'grey.50',
+                  },
+                }}
+              >
+                <ListItemIcon sx={{ minWidth: 40 }}>
+                  <item.icon />
+                </ListItemIcon>
+                <ListItemText 
+                  primary={item.name}
+                  primaryTypographyProps={{
+                    fontWeight: 600,
+                    fontSize: '0.875rem',
+                  }}
+                />
+              </ListItemButton>
+            </ListItem>
+          ))}
+        </List>
+      </Box>
+    </Box>
+  );
+
+  return (
+    <>
+      {/* Mobile Drawer */}
+      {isMobile ? (
+        <Drawer
+          anchor="left"
+          open={isOpen}
+          onClose={onClose}
+          ModalProps={{
+            keepMounted: true, // Better open performance on mobile.
+          }}
+          sx={{
+            '& .MuiDrawer-paper': {
+              width: width,
+              boxSizing: 'border-box',
+              background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.95) 0%, rgba(255, 255, 255, 0.85) 100%)',
+              backdropFilter: 'blur(20px)',
+              borderRight: '1px solid rgba(255, 255, 255, 0.2)',
+            },
+          }}
+        >
+          {drawerContent}
+        </Drawer>
+      ) : (
+        /* Desktop Drawer */
+        <Drawer
+          variant="permanent"
+          sx={{
+            width: width,
+            flexShrink: 0,
+            '& .MuiDrawer-paper': {
+              width: width,
+              boxSizing: 'border-box',
+              background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.95) 0%, rgba(255, 255, 255, 0.85) 100%)',
+              backdropFilter: 'blur(20px)',
+              borderRight: '1px solid rgba(255, 255, 255, 0.2)',
+            },
+          }}
+        >
+          {drawerContent}
+        </Drawer>
+      )}
+    </>
+  );
+};
+
+export default Sidebar;

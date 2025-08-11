@@ -1,11 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   ThemeProvider,
-  createTheme,
   CssBaseline,
-  AppBar,
-  Toolbar,
-  Typography,
   Container,
   Paper,
   Button,
@@ -30,7 +26,8 @@ import {
   TableRow,
   TableSortLabel,
   TablePagination,
-  InputAdornment
+  InputAdornment,
+  Typography
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -39,21 +36,11 @@ import {
   Save as SaveIcon,
   Cancel as CancelIcon,
   FilterList as FilterIcon,
-  Clear as ClearIcon,
-  ArrowBack as ArrowBackIcon
+  Clear as ClearIcon
 } from '@mui/icons-material';
 import { format } from 'date-fns';
-
-const theme = createTheme({
-  palette: {
-    primary: {
-      main: '#4a90e2',
-    },
-    secondary: {
-      main: '#87ceeb',
-    },
-  },
-});
+import customTheme from './customTheme';
+import Layout from './components/Layout/Layout';
 
 const API_BASE_URL = 'http://localhost:8000';
 
@@ -768,14 +755,9 @@ const NewExpense = ({ onNavigate }) => {
 
   return (
     <Container maxWidth="md" sx={{ mt: 4, mb: 4 }}>
-      <Box mb={3} display="flex" alignItems="center" gap={2}>
-        <IconButton onClick={() => onNavigate('home')}>
-          <ArrowBackIcon />
-        </IconButton>
-        <Typography variant="h4">
-          Új költés rögzítése
-        </Typography>
-      </Box>
+      <Typography variant="h4" gutterBottom sx={{ mb: 3 }}>
+        Új költés rögzítése
+      </Typography>
       
       <form onSubmit={handleSubmit}>
         {expenses.map((expense, index) => (
@@ -878,12 +860,6 @@ const NewExpense = ({ onNavigate }) => {
         
         <Box display="flex" gap={2} justifyContent="flex-end">
           <Button
-            variant="outlined"
-            onClick={() => onNavigate('home')}
-          >
-            Vissza
-          </Button>
-          <Button
             type="submit"
             variant="contained"
             startIcon={<SaveIcon />}
@@ -978,14 +954,9 @@ const NewTypeForm = ({ onNavigate }) => {
 
   return (
     <Container maxWidth="md" sx={{ mt: 4, mb: 4 }}>
-      <Box mb={3} display="flex" alignItems="center" gap={2}>
-        <IconButton onClick={() => onNavigate('limits')}>
-          <ArrowBackIcon />
-        </IconButton>
-        <Typography variant="h4">
-          Új típus felvétele
-        </Typography>
-      </Box>
+      <Typography variant="h4" gutterBottom sx={{ mb: 3 }}>
+        Új típus felvétele
+      </Typography>
       
       <Card>
         <CardContent>
@@ -1030,13 +1001,6 @@ const NewTypeForm = ({ onNavigate }) => {
             </Grid>
             
             <Box mt={3} display="flex" gap={2} justifyContent="flex-end">
-              <Button
-                variant="outlined"
-                onClick={() => onNavigate('limits')}
-                disabled={loading}
-              >
-                Vissza
-              </Button>
               <Button
                 type="submit"
                 variant="contained"
@@ -1170,14 +1134,9 @@ const LimitsManagement = ({ onNavigate }) => {
 
   return (
     <Container maxWidth="md" sx={{ mt: 4, mb: 4 }}>
-      <Box mb={3} display="flex" alignItems="center" gap={2}>
-        <IconButton onClick={() => onNavigate('home')}>
-          <ArrowBackIcon />
-        </IconButton>
-        <Typography variant="h4">
-          Limit módosítás
-        </Typography>
-      </Box>
+      <Typography variant="h4" gutterBottom sx={{ mb: 3 }}>
+        Típusok kezelése
+      </Typography>
       
       <TableContainer component={Paper} elevation={3}>
         <Table>
@@ -1267,15 +1226,9 @@ const LimitsManagement = ({ onNavigate }) => {
         </Table>
       </TableContainer>
       
-      <Box mt={2} display="flex" gap={2}>
+      <Box mt={2}>
         <Button
           variant="contained"
-          onClick={() => onNavigate('home')}
-        >
-          Vissza az áttekintéshez
-        </Button>
-        <Button
-          variant="outlined"
           startIcon={<AddIcon />}
           onClick={() => onNavigate('new-type')}
         >
@@ -1319,16 +1272,11 @@ const App = () => {
   };
 
   return (
-    <ThemeProvider theme={theme}>
+    <ThemeProvider theme={customTheme}>
       <CssBaseline />
-      <AppBar position="static">
-        <Toolbar>
-          <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>
-            Budget Kalkulátor
-          </Typography>
-        </Toolbar>
-      </AppBar>
-      {renderCurrentPage()}
+      <Layout currentPage={currentPage} onNavigate={navigate}>
+        {renderCurrentPage()}
+      </Layout>
     </ThemeProvider>
   );
 };
