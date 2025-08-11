@@ -6,7 +6,7 @@ urlpatterns = [
     path('expenses', views.expense_overview, name='expense_overview'),
     path('expenses/sum', views.expense_summary, name='expense_summary'),
     path('expenses/limit', views.types_list, name='types_list'),
-    path('expenses/limit/<int:type_id>', views.update_limit, name='update_limit'),
-    path('expensetype', views.create_type, name='create_type'),
+    path('expensetype', views.manage_type, name='manage_type'),
+    path('expensetype/<int:type_id>', views.manage_type, name='manage_type_with_id'),
     path('expenses/<int:expenses_id>', views.update_expense, name='update_expense'),
 ]

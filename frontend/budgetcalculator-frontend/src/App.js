@@ -99,6 +99,9 @@ const api = {
       body: JSON.stringify(typeData),
     });
     if (!response.ok) {
+      if (response.status === 409) {
+        throw new Error('A típus név már létezik');
+      }
       throw new Error('Failed to create type');
     }
     return response.json();
@@ -118,12 +121,19 @@ const api = {
     return response.json();
   },
 
-  updateLimit: async (typeId, limitMonth) => {
-    const response = await fetch(`${API_BASE_URL}/expenses/limit/${typeId}?limitMonth=${limitMonth}`, {
-      method: 'PUT'
+  updateExpenseType: async (typeId, updateData) => {
+    const response = await fetch(`${API_BASE_URL}/expensetype/${typeId}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(updateData),
     });
     if (!response.ok) {
-      throw new Error('Failed to update limit');
+      if (response.status === 409) {
+        throw new Error('A típus név már létezik');
+      }
+      throw new Error('Failed to update expense type');
     }
     return response.json();
   },
@@ -342,11 +352,31 @@ const Homepage = ({ onNavigate }) => {
 
   const handleSave = async (expenseId) => {
     try {
+      // Validate data before sending
+      if (!editData.date || !editData.typeId || !editData.cost) {
+        setSnackbar({
+          open: true,
+          message: 'Minden kötelező mezőt ki kell tölteni!',
+          severity: 'error'
+        });
+        return;
+      }
+
+      const costValue = parseInt(editData.cost);
+      if (isNaN(costValue) || costValue <= 0) {
+        setSnackbar({
+          open: true,
+          message: 'Az összeg pozitív egész szám kell legyen!',
+          severity: 'error'
+        });
+        return;
+      }
+
       // Prepare data with proper types
       const dataToSend = {
         date: editData.date,
         typeId: parseInt(editData.typeId),
-        cost: parseInt(editData.cost) || 0,
+        cost: costValue,
         description: editData.description || ''
       };
       
@@ -393,13 +423,6 @@ const Homepage = ({ onNavigate }) => {
     setEditData(prev => ({ ...prev, [field]: value }));
   };
 
-  const overviewColumns = [
-    { id: 'date', label: 'Dátum', format: (value) => format(new Date(value), 'yyyy-MM-dd') },
-    { id: 'typeName', label: 'Típus' },
-    { id: 'cost', label: 'Összeg', format: (value) => Math.floor(value).toLocaleString('hu-HU') + ' Ft' },
-    { id: 'description', label: 'Leírás' },
-    { id: 'actions', label: 'Műveletek' },
-  ];
 
   const summaryColumns = [
     { id: 'month', label: 'Hónap' },
@@ -485,7 +508,17 @@ const Homepage = ({ onNavigate }) => {
                             size="small"
                             type="number"
                             value={editData.cost || ''}
-                            onChange={(e) => handleEditChange('cost', e.target.value)}
+                            onChange={(e) => {
+                              const value = e.target.value;
+                              if (value === '' || (/^\d+$/.test(value) && parseInt(value) > 0)) {
+                                handleEditChange('cost', value);
+                              }
+                            }}
+                            onKeyPress={(e) => {
+                              if (e.key === 'e' || e.key === 'E' || e.key === '+' || e.key === '-' || e.key === '.') {
+                                e.preventDefault();
+                              }
+                            }}
                             InputProps={{
                               endAdornment: <InputAdornment position="end">Ft</InputAdornment>
                             }}
@@ -788,7 +821,17 @@ const NewExpense = ({ onNavigate }) => {
                     label="Összeg"
                     type="number"
                     value={expense.cost}
-                    onChange={(e) => updateExpense(index, 'cost', e.target.value)}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      if (value === '' || (/^\d+$/.test(value) && parseInt(value) > 0)) {
+                        updateExpense(index, 'cost', value);
+                      }
+                    }}
+                    onKeyPress={(e) => {
+                      if (e.key === 'e' || e.key === 'E' || e.key === '+' || e.key === '-' || e.key === '.') {
+                        e.preventDefault();
+                      }
+                    }}
                     InputProps={{
                       endAdornment: <InputAdornment position="end">Ft</InputAdornment>
                     }}
@@ -889,10 +932,10 @@ const NewTypeForm = ({ onNavigate }) => {
       return;
     }
     
-    if (formData.typeName.length > 20) {
+    if (formData.typeName.length > 50) {
       setSnackbar({
         open: true,
-        message: 'A típus megnevezése maximum 20 karakter lehet!',
+        message: 'A típus megnevezése maximum 50 karakter lehet!',
         severity: 'error'
       });
       return;
@@ -954,9 +997,9 @@ const NewTypeForm = ({ onNavigate }) => {
                   label="Új típus megnevezése"
                   value={formData.typeName}
                   onChange={(e) => handleChange('typeName', e.target.value)}
-                  inputProps={{ maxLength: 20 }}
+                  inputProps={{ maxLength: 50 }}
                   required
-                  helperText={`${formData.typeName.length}/20 karakter`}
+                  helperText={`${formData.typeName.length}/50 karakter`}
                 />
               </Grid>
               
@@ -966,7 +1009,17 @@ const NewTypeForm = ({ onNavigate }) => {
                   label="Havi limit"
                   type="number"
                   value={formData.limitMonth}
-                  onChange={(e) => handleChange('limitMonth', e.target.value)}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    if (value === '' || (/^\d+$/.test(value) && parseInt(value) >= 0)) {
+                      handleChange('limitMonth', value);
+                    }
+                  }}
+                  onKeyPress={(e) => {
+                    if (e.key === 'e' || e.key === 'E' || e.key === '+' || e.key === '-' || e.key === '.') {
+                      e.preventDefault();
+                    }
+                  }}
                   InputProps={{
                     endAdornment: <InputAdornment position="end">Ft</InputAdornment>
                   }}
@@ -1015,7 +1068,7 @@ const LimitsManagement = ({ onNavigate }) => {
   const [types, setTypes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [editingId, setEditingId] = useState(null);
-  const [editValue, setEditValue] = useState('');
+  const [editData, setEditData] = useState({ typeName: '', limitMonth: '' });
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
 
   useEffect(() => {
@@ -1033,14 +1086,37 @@ const LimitsManagement = ({ onNavigate }) => {
     }
   };
 
-  const handleEdit = (typeId, currentLimit) => {
-    setEditingId(typeId);
-    setEditValue(currentLimit || '');
+  const handleEdit = (type) => {
+    setEditingId(type.typeId);
+    setEditData({
+      typeName: type.typeName || '',
+      limitMonth: type.limitMonth || ''
+    });
   };
 
   const handleSave = async (typeId) => {
     try {
-      if (editValue < 0) {
+      // Validation
+      if (!editData.typeName.trim()) {
+        setSnackbar({
+          open: true,
+          message: 'A típus neve kötelező!',
+          severity: 'error'
+        });
+        return;
+      }
+
+      if (editData.typeName.length > 50) {
+        setSnackbar({
+          open: true,
+          message: 'A típus neve maximum 50 karakter lehet!',
+          severity: 'error'
+        });
+        return;
+      }
+
+      const limitValue = parseInt(editData.limitMonth);
+      if (editData.limitMonth !== '' && (isNaN(limitValue) || limitValue < 0)) {
         setSnackbar({
           open: true,
           message: 'A limit nem lehet negatív!',
@@ -1049,20 +1125,31 @@ const LimitsManagement = ({ onNavigate }) => {
         return;
       }
       
-      await api.updateLimit(typeId, parseInt(editValue) || 0);
+      // Prepare update data
+      const updateData = {
+        typeName: editData.typeName.trim(),
+      };
+      
+      if (editData.limitMonth !== '') {
+        updateData.limitMonth = limitValue;
+      } else {
+        updateData.limitMonth = null;
+      }
+      
+      await api.updateExpenseType(typeId, updateData);
       await loadTypes();
       setEditingId(null);
-      setEditValue('');
+      setEditData({ typeName: '', limitMonth: '' });
       setSnackbar({
         open: true,
-        message: 'Limit sikeresen frissítve!',
+        message: 'Típus sikeresen frissítve!',
         severity: 'success'
       });
     } catch (error) {
-      console.error('Error updating limit:', error);
+      console.error('Error updating type:', error);
       setSnackbar({
         open: true,
-        message: 'Hiba történt a mentés során!',
+        message: error.message || 'Hiba történt a mentés során!',
         severity: 'error'
       });
     }
@@ -1070,7 +1157,7 @@ const LimitsManagement = ({ onNavigate }) => {
 
   const handleCancel = () => {
     setEditingId(null);
-    setEditValue('');
+    setEditData({ typeName: '', limitMonth: '' });
   };
 
   if (loading) {
@@ -1104,18 +1191,43 @@ const LimitsManagement = ({ onNavigate }) => {
           <TableBody>
             {types.map(type => (
               <TableRow key={type.typeId} hover>
-                <TableCell>{type.typeName}</TableCell>
+                <TableCell>
+                  {editingId === type.typeId ? (
+                    <TextField
+                      size="small"
+                      value={editData.typeName}
+                      onChange={(e) => {
+                        setEditData(prev => ({ ...prev, typeName: e.target.value }));
+                      }}
+                      inputProps={{ maxLength: 50 }}
+                      helperText={`${editData.typeName.length}/50 karakter`}
+                    />
+                  ) : (
+                    type.typeName
+                  )}
+                </TableCell>
                 <TableCell>
                   {editingId === type.typeId ? (
                     <TextField
                       size="small"
                       type="number"
-                      value={editValue}
-                      onChange={(e) => setEditValue(e.target.value)}
+                      value={editData.limitMonth}
+                      onChange={(e) => {
+                        const value = e.target.value;
+                        if (value === '' || (/^\d+$/.test(value) && parseInt(value) >= 0)) {
+                          setEditData(prev => ({ ...prev, limitMonth: value }));
+                        }
+                      }}
+                      onKeyPress={(e) => {
+                        if (e.key === 'e' || e.key === 'E' || e.key === '+' || e.key === '-' || e.key === '.') {
+                          e.preventDefault();
+                        }
+                      }}
                       inputProps={{ min: 0 }}
                       InputProps={{
                         endAdornment: <InputAdornment position="end">Ft</InputAdornment>
                       }}
+                      placeholder="Opcionális"
                     />
                   ) : (
                     type.limitMonth ? Math.floor(type.limitMonth).toLocaleString('hu-HU') + ' Ft' : '-'
@@ -1142,7 +1254,7 @@ const LimitsManagement = ({ onNavigate }) => {
                   ) : (
                     <IconButton
                       color="primary"
-                      onClick={() => handleEdit(type.typeId, type.limitMonth)}
+                      onClick={() => handleEdit(type)}
                       size="small"
                     >
                       <EditIcon />

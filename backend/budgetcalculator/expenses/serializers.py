@@ -2,6 +2,10 @@
 from rest_framework import serializers
 from .models import Expenses, Types
 
+class TypeNameAlreadyExistsError(serializers.ValidationError):
+    """Custom exception for type name uniqueness constraint"""
+    pass
+
 class ExpenseOverviewSerializer(serializers.ModelSerializer):
     expensesId = serializers.IntegerField(source='id')
     date = serializers.DateField(source='date_exp')
@@ -109,7 +113,7 @@ class TypesUpdateSerializer(serializers.ModelSerializer):
 
 # ÚJ: Típus létrehozása serializer
 class TypeCreateSerializer(serializers.Serializer):
-    typeName = serializers.CharField(max_length=20)
+    typeName = serializers.CharField(max_length=50)
     limitMonth = serializers.IntegerField(required=False, allow_null=True)
     
     # Response fields
@@ -118,9 +122,15 @@ class TypeCreateSerializer(serializers.Serializer):
     def validate_typeName(self, value):
         if len(value.strip()) == 0:
             raise serializers.ValidationError("A típus neve nem lehet üres")
-        if len(value) > 20:
-            raise serializers.ValidationError("A típus neve maximum 20 karakter lehet")
-        return value.strip()
+        if len(value) > 50:
+            raise serializers.ValidationError("A típus neve maximum 50 karakter lehet")
+        
+        # Check for uniqueness
+        cleaned_value = value.strip()
+        if Types.objects.filter(type_name__iexact=cleaned_value).exists():
+            raise TypeNameAlreadyExistsError("A típus név már létezik")
+        
+        return cleaned_value
     
     def validate_limitMonth(self, value):
         if value is not None and value < 0:
@@ -159,6 +169,85 @@ class TypeCreateSerializer(serializers.Serializer):
             
         except Exception as e:
             raise serializers.ValidationError(f"Database error: {str(e)}")
+
+# ÚJ: Típus módosítása serializer
+class TypeUpdateSerializer(serializers.Serializer):
+    typeName = serializers.CharField(max_length=50, required=False)
+    limitMonth = serializers.IntegerField(required=False, allow_null=True)
+    
+    def __init__(self, *args, **kwargs):
+        self.instance_id = kwargs.pop('instance_id', None)
+        super().__init__(*args, **kwargs)
+    
+    def validate_typeName(self, value):
+        if value is not None:
+            if len(value.strip()) == 0:
+                raise serializers.ValidationError("A típus neve nem lehet üres")
+            if len(value) > 50:
+                raise serializers.ValidationError("A típus neve maximum 50 karakter lehet")
+            
+            # Check for uniqueness, excluding current instance
+            cleaned_value = value.strip()
+            existing_types = Types.objects.filter(type_name__iexact=cleaned_value)
+            if self.instance_id:
+                existing_types = existing_types.exclude(id=self.instance_id)
+            
+            if existing_types.exists():
+                raise TypeNameAlreadyExistsError("A típus név már létezik")
+            
+            return cleaned_value
+        return value
+    
+    def validate_limitMonth(self, value):
+        if value is not None and value < 0:
+            raise serializers.ValidationError("A limit nem lehet negatív")
+        return value
+    
+    def update(self, instance_id, validated_data):
+        from django.db import connection
+        
+        try:
+            # Check if type exists
+            type_obj = Types.objects.get(id=instance_id)
+            
+            # Prepare update fields
+            update_fields = []
+            update_values = []
+            
+            if 'typeName' in validated_data and validated_data['typeName'] is not None:
+                update_fields.append("TYPE_NAME = %s")
+                update_values.append(validated_data['typeName'])
+            
+            if 'limitMonth' in validated_data:
+                update_fields.append("LIMIT_MONTH = %s")
+                update_values.append(validated_data['limitMonth'])
+            
+            if not update_fields:
+                raise serializers.ValidationError("No fields to update")
+            
+            # Perform SQL update
+            update_values.append(instance_id)  # Add WHERE condition value
+            
+            with connection.cursor() as cursor:
+                cursor.execute(f"""
+                    UPDATE TYPES 
+                    SET {', '.join(update_fields)}
+                    WHERE ID = %s
+                """, update_values)
+            
+            # Return updated data
+            updated_type = Types.objects.get(id=instance_id)
+            return {
+                'typeId': updated_type.id,
+                'typeName': updated_type.type_name,
+                'limitMonth': updated_type.limit_month
+            }
+            
+        except Types.DoesNotExist:
+            raise serializers.ValidationError("Típus nem található")
+        except Exception as e:
+            raise serializers.ValidationError(f"Database error: {str(e)}")
+
 # ÚJ: Költés módosítása serializer
 class ExpenseUpdateSerializer(serializers.Serializer):
     date = serializers.DateField()

@@ -15,9 +15,10 @@ from .serializers import (
     ExpenseCreateRequestSerializer,
     ExpenseCreateResponseSerializer,
     TypesListSerializer,
-    TypesUpdateSerializer,
     TypeCreateSerializer,
-    ExpenseUpdateSerializer
+    TypeUpdateSerializer,
+    ExpenseUpdateSerializer,
+    TypeNameAlreadyExistsError
 )
 import logging
 
@@ -32,13 +33,6 @@ expense_id_param = openapi.Parameter(
     required=False
 )
 
-limit_month_param = openapi.Parameter(
-    'limitMonth', 
-    openapi.IN_QUERY, 
-    description="Havi limit összege", 
-    type=openapi.TYPE_INTEGER,
-    required=True
-)
 
 @swagger_auto_schema(
     method='get',
@@ -216,61 +210,6 @@ def types_list(request):
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
 
-@swagger_auto_schema(
-    method='put',
-    operation_description="A limitek módosítását lehetővé tevő API. A limit nem lehet negatív érték.",
-    manual_parameters=[limit_month_param],
-    responses={
-        200: TypesUpdateSerializer,
-        400: 'Bad Request - hiányzó vagy hibás paraméter',
-        404: 'Type not found',
-        500: 'Internal server error'
-    },
-    tags=['Types']
-)
-@api_view(['PUT'])
-def update_limit(request, type_id):
-    """
-    PUT /expenses/limit/<type_id>
-    A limitek módosítását lehetővé tevő API.
-    """
-    try:
-        limit_month = request.query_params.get('limitMonth')
-        
-        if not limit_month:
-            return Response(
-                {"error": "limitMonth parameter required"}, 
-                status=status.HTTP_400_BAD_REQUEST
-            )
-            
-        try:
-            limit_month = int(limit_month)
-        except ValueError:
-            return Response(
-                {"error": "limitMonth must be an integer"}, 
-                status=status.HTTP_400_BAD_REQUEST
-            )
-            
-        try:
-            type_obj = Types.objects.get(id=type_id)
-            type_obj.limit_month = limit_month
-            type_obj.save()
-            
-            serializer = TypesUpdateSerializer(type_obj)
-            return Response(serializer.data, status=status.HTTP_200_OK)
-            
-        except Types.DoesNotExist:
-            return Response(
-                {"error": "Type not found"}, 
-                status=status.HTTP_404_NOT_FOUND
-            )
-            
-    except Exception as e:
-        logger.error(f"Error in update_limit: {str(e)}")
-        return Response(
-            {"error": "Internal server error"}, 
-            status=status.HTTP_500_INTERNAL_SERVER_ERROR
-        )
 
 # ÚJ: Típus létrehozása
 @swagger_auto_schema(
@@ -290,32 +229,115 @@ def update_limit(request, type_id):
             )
         ),
         400: 'Bad Request - hibás adatok',
+        409: 'Conflict - típus név már létezik',
         500: 'Internal server error'
     },
     tags=['Types']
 )
-# EGYSÉGES: Type létrehozása
-@api_view(['POST'])
-def create_type(request):
+@swagger_auto_schema(
+    method='put',
+    operation_description="Típus módosítása API. Típus nevét és/vagy limitjét módosítja. Típus név egyediségét ellenőrzi.",
+    request_body=TypeUpdateSerializer,
+    responses={
+        200: openapi.Response(
+            description="Sikeres módosítás",
+            schema=openapi.Schema(
+                type=openapi.TYPE_OBJECT,
+                properties={
+                    'typeId': openapi.Schema(type=openapi.TYPE_INTEGER, description='Típus ID'),
+                    'typeName': openapi.Schema(type=openapi.TYPE_STRING, description='Módosított típus neve'),
+                    'limitMonth': openapi.Schema(type=openapi.TYPE_INTEGER, description='Módosított havi limit'),
+                }
+            )
+        ),
+        400: 'Bad Request - hibás adatok',
+        404: 'Not Found - típus nem található',
+        409: 'Conflict - típus név már létezik',
+        500: 'Internal server error'
+    },
+    tags=['Types']
+)
+# EGYSÉGES: Type létrehozása és módosítása
+@api_view(['POST', 'PUT'])
+def manage_type(request, type_id=None):
     """
-    POST /expensetype
-    Új típust létrehozó API.
+    POST /expensetype - Új típust létrehozó API
+    PUT /expensetype/<type_id> - Típus módosítása API
     """
-    try:
-        serializer = TypeCreateSerializer(data=request.data)
-        
-        if serializer.is_valid():
-            result = serializer.save()  # Dictionary-t ad vissza
-            return Response(result, status=status.HTTP_201_CREATED)
-        else:
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    if request.method == 'POST':
+        try:
+            serializer = TypeCreateSerializer(data=request.data)
             
-    except Exception as e:
-        logger.error(f"Error in create_type: {str(e)}")
-        return Response(
-            {"error": "Internal server error"}, 
-            status=status.HTTP_500_INTERNAL_SERVER_ERROR
-        )
+            if serializer.is_valid():
+                result = serializer.save()  # Dictionary-t ad vissza
+                return Response(result, status=status.HTTP_201_CREATED)
+            else:
+                # Check if the error is specifically about type name uniqueness
+                if 'typeName' in serializer.errors:
+                    for error in serializer.errors['typeName']:
+                        if isinstance(error, TypeNameAlreadyExistsError) or "már létezik" in str(error):
+                            return Response(
+                                {"error": "A típus név már létezik"}, 
+                                status=status.HTTP_409_CONFLICT
+                            )
+                return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+                
+        except TypeNameAlreadyExistsError as e:
+            return Response(
+                {"error": "A típus név már létezik"}, 
+                status=status.HTTP_409_CONFLICT
+            )
+        except Exception as e:
+            logger.error(f"Error in create_type: {str(e)}")
+            return Response(
+                {"error": "Internal server error"}, 
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+    
+    elif request.method == 'PUT':
+        try:
+            if not type_id:
+                return Response(
+                    {"error": "Type ID is required for PUT method"}, 
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Check if type exists
+            try:
+                Types.objects.get(id=type_id)
+            except Types.DoesNotExist:
+                return Response(
+                    {"error": "Típus nem található"}, 
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            
+            serializer = TypeUpdateSerializer(data=request.data, instance_id=type_id)
+            
+            if serializer.is_valid():
+                result = serializer.update(type_id, serializer.validated_data)
+                return Response(result, status=status.HTTP_200_OK)
+            else:
+                # Check if the error is specifically about type name uniqueness
+                if 'typeName' in serializer.errors:
+                    for error in serializer.errors['typeName']:
+                        if isinstance(error, TypeNameAlreadyExistsError) or "már létezik" in str(error):
+                            return Response(
+                                {"error": "A típus név már létezik"}, 
+                                status=status.HTTP_409_CONFLICT
+                            )
+                return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+                
+        except TypeNameAlreadyExistsError as e:
+            return Response(
+                {"error": "A típus név már létezik"}, 
+                status=status.HTTP_409_CONFLICT
+            )
+        except Exception as e:
+            logger.error(f"Error in update_type: {str(e)}")
+            return Response(
+                {"error": "Internal server error"}, 
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
 # ÚJ: Költés módosítása
 @swagger_auto_schema(
